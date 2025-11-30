@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BUZZ RICKO Visualizer</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; outline: none; }
+        html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+        body { 
+            width: 100%; 
+            height: 100%; 
+            margin: 0;
+            padding: 0;
+            overflow: hidden; 
+            background: #000; 
+            font-family: 'Courier New', monospace; 
+            position: fixed; /* Empêche le scroll élastique sur mobile */
+        }
+        #canvas-container { 
+            width: 100%; 
+            height: 100%; 
+            position: fixed; 
+            top: 0; 
+            left: 0; 
+            right: 0;
+            bottom: 0;
+            z-index: 1;
+            display: block;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        #hover-zone { position: fixed; top: 0; left: 0; width: 100%; height: 30px; z-index: 101; }
+        #control-panel {
+            position: fixed; top: -90px; left: 0; width: 100%; background: rgba(0,0,0,0.85);
+            backdrop-filter: blur(10px); border-bottom: 1px solid #333; display: flex;
+            justify-content: center; align-items: center; gap: 50px; flex-wrap: wrap;
+            transition: top 0.4s ease; z-index: 100; padding: 15px 10px;
+        }
+        .ctrl { display: flex; flex-direction: column; align-items: center; color: #fff; }
+        .ctrl label { font-size: 12px; margin-bottom: 5px; color: #0f0; text-transform: uppercase; letter-spacing: 1px; }
+        .ctrl input[type=range] { width: 150px; cursor: pointer; accent-color: #0f0; }
+        #overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex;
+            flex-direction: column; justify-content: center; align-items: center;
+            background: rgba(0,0,0,0.95); color: #fff; z-index: 50; transition: opacity 0.5s; text-align: center; padding: 20px;
+        }
+        #overlay h1 { font-size: clamp(2rem, 8vw, 4rem); margin-bottom: 30px; color: #0f0; text-shadow: 0 0 20px #0f0; }
+        .step { margin: 8px 0; font-size: clamp(14px, 3vw, 18px); color: #ccc; }
+        .hl { color: #0f0; font-weight: bold; }
+        #start-btn {
+            padding: 15px 40px; font-size: clamp(16px, 4vw, 24px); background: transparent;
+            border: 2px solid #0f0; color: #0f0; cursor: pointer; transition: all 0.3s;
+            text-transform: uppercase; letter-spacing: 3px; margin-top: 30px;
+        }
+        #start-btn:hover { background: #0f0; color: #000; box-shadow: 0 0 30px #0f0; }
+        #info { position: fixed; bottom: 15px; left: 50%; transform: translateX(-50%); color: rgba(255,255,255,0.3); font-size: 11px; z-index: 10; text-align: center; pointer-events: none; }
+        .hidden { opacity: 0; pointer-events: none; }
+        @media (max-width: 600px) {
+            #control-panel { gap: 25px; padding: 10px; }
+            .ctrl input[type=range] { width: 110px; }
+            .ctrl label { font-size: 10px; }
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+    <div id="hover-zone"></div>
+    <div id="control-panel">
+        <div class="ctrl">
+            <label>Sensibilité</label>
+            <input type="range" id="sens" min="0" max="3" step="0.1" value="1.5">
+        </div>
+        <div class="ctrl">
+            <label>Vitesse</label>
+            <input type="range" id="speed" min="0.1" max="3" step="0.1" value="1.0">
+        </div>
+    </div>
+    <div id="overlay">
+        <h1>BUZZ RICKO</h1>
+        <div class="step">1. Cliquez sur le bouton ci-dessous</div>
+        <div class="step">2. Sélectionnez l'<span class="hl">onglet ou l'écran</span> avec la musique</div>
+        <div class="step">3. <span class="hl" style="text-decoration:underline;">Cochez "Partager l'audio"</span></div>
+        <button id="start-btn">Connecter l'Audio</button>
+    </div>
+    <div id="canvas-container"></div>
+    <div id="info">Double-cliquez: Plein Écran • Wormhole infini • Menu en haut</div>
+
+    <script src="shader.js"></script>
+    <script>
+    (function() {
+        const container = document.getElementById('canvas-container');
+        const overlay = document.getElementById('overlay');
+        const panel = document.getElementById('control-panel');
+        const hoverZone = document.getElementById('hover-zone');
+        const sensSlider = document.getElementById('sens');
+        const speedSlider = document.getElementById('speed');
+        const startBtn = document.getElementById('start-btn');
+
+        let audioCtx, analyser, dataArr, audioActive = false;
+        let bass = 0, treble = 0;
+        let timeout;
+
+        function showPanel() {
+            panel.style.top = '0';
+            clearTimeout(timeout);
+            timeout = setTimeout(() => panel.style.top = '-90px', 3000);
+        }
+        hoverZone.onmouseenter = showPanel;
+        panel.onmouseenter = showPanel;
+        panel.onmousemove = showPanel;
+
+        async function initAudio() {
+            try {
+                const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                analyser = audioCtx.createAnalyser();
+                analyser.fftSize = 512;
+                audioCtx.createMediaStreamSource(stream).connect(analyser);
+                dataArr = new Uint8Array(analyser.frequencyBinCount);
+                audioActive = true;
+                overlay.classList.add('hidden');
+                stream.getVideoTracks()[0].onended = () => { overlay.classList.remove('hidden'); audioActive = false; };
+            } catch (e) { alert("Erreur: Avez-vous coché 'Partager l'audio'? " + e.message); }
+        }
+        startBtn.onclick = initAudio;
+
+        const scene = new THREE.Scene();
+        const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        container.appendChild(renderer.domElement);
+
+        const uniforms = {
+            iTime: { value: 0 },
+            iResolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+            uBass: { value: 0 },
+            uMid: { value: 0 },
+            uTreble: { value: 0 },
+            uSensitivity: { value: 1.5 },
+            uSpeed: { value: 1.0 }
+        };
+
+        const mat = new THREE.ShaderMaterial({ vertexShader, fragmentShader, uniforms });
+        scene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), mat));
+
+        function animate(t) {
+            requestAnimationFrame(animate);
+            const s = t * 0.001;
+
+            if (audioActive && analyser) {
+                analyser.getByteFrequencyData(dataArr);
+                let b = 0, tr = 0;
+                for (let i = 0; i < 10; i++) b += dataArr[i];
+                for (let i = 50; i < 100; i++) tr += dataArr[i];
+                bass += ((b / 10 / 255) - bass) * 0.15;
+                treble += ((tr / 50 / 255) - treble) * 0.15;
+            }
+
+            uniforms.iTime.value = s;
+            uniforms.uBass.value = bass;
+            uniforms.uTreble.value = treble;
+            uniforms.uSensitivity.value = parseFloat(sensSlider.value);
+            uniforms.uSpeed.value = parseFloat(speedSlider.value);
+            renderer.render(scene, camera);
+        }
+        animate(0);
+
+        window.onresize = () => {
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            uniforms.iResolution.value.set(window.innerWidth, window.innerHeight);
+        };
+
+        window.ondblclick = () => {
+            if (!document.fullscreenElement) document.body.requestFullscreen();
+            else document.exitFullscreen();
+        };
+    })();
+    </script>
+</body>
+</html>
