@@ -55,12 +55,43 @@
         #overlay h1 { font-size: clamp(2rem, 8vw, 4rem); margin-bottom: 30px; color: #0f0; text-shadow: 0 0 20px #0f0; }
         .step { margin: 8px 0; font-size: clamp(14px, 3vw, 18px); color: #ccc; }
         .hl { color: #0f0; font-weight: bold; }
-        #start-btn {
+        .btn-action {
             padding: 15px 40px; font-size: clamp(16px, 4vw, 24px); background: transparent;
             border: 2px solid #0f0; color: #0f0; cursor: pointer; transition: all 0.3s;
-            text-transform: uppercase; letter-spacing: 3px; margin-top: 30px;
+            text-transform: uppercase; letter-spacing: 3px; margin-top: 15px;
         }
-        #start-btn:hover { background: #0f0; color: #000; box-shadow: 0 0 30px #0f0; }
+        .btn-action:hover { background: #0f0; color: #000; box-shadow: 0 0 30px #0f0; }
+        .btn-secondary {
+            border-color: #0af; color: #0af;
+        }
+        .btn-secondary:hover { background: #0af; color: #000; box-shadow: 0 0 30px #0af; }
+        .btn-container { display: flex; flex-direction: column; gap: 10px; align-items: center; }
+        .separator { color: #666; margin: 15px 0 5px 0; font-size: 14px; }
+        #file-input { display: none; }
+        #audio-controls {
+            position: fixed; bottom: 50px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.85); backdrop-filter: blur(10px);
+            border: 1px solid #333; border-radius: 10px; padding: 15px 25px;
+            display: none; align-items: center; gap: 15px; z-index: 100;
+        }
+        #audio-controls.visible { display: flex; }
+        .audio-btn {
+            background: transparent; border: 1px solid #0af; color: #0af;
+            width: 40px; height: 40px; border-radius: 50%; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            transition: all 0.3s; font-size: 16px;
+        }
+        .audio-btn:hover { background: #0af; color: #000; }
+        #progress-container {
+            width: 200px; height: 6px; background: #333; border-radius: 3px;
+            cursor: pointer; position: relative;
+        }
+        #progress-bar {
+            height: 100%; background: #0af; border-radius: 3px; width: 0%;
+            transition: width 0.1s linear;
+        }
+        #time-display { color: #888; font-size: 12px; min-width: 80px; text-align: center; }
+        #volume-slider { width: 80px; accent-color: #0af; }
         #info { position: fixed; bottom: 15px; left: 50%; transform: translateX(-50%); color: rgba(255,255,255,0.3); font-size: 11px; z-index: 10; text-align: center; pointer-events: none; }
         .hidden { opacity: 0; pointer-events: none; }
         @media (max-width: 600px) {
@@ -88,7 +119,20 @@
         <div class="step">1. Cliquez sur le bouton ci-dessous</div>
         <div class="step">2. Sélectionnez l'<span class="hl">onglet ou l'écran</span> avec la musique</div>
         <div class="step">3. <span class="hl" style="text-decoration:underline;">Cochez "Partager l'audio"</span></div>
-        <button id="start-btn">Connecter l'Audio</button>
+        <div class="btn-container">
+            <button id="start-btn" class="btn-action">Connecter l'Audio</button>
+            <div class="separator">— ou —</div>
+            <button id="file-btn" class="btn-action btn-secondary">Charger un Fichier Audio</button>
+            <input type="file" id="file-input" accept="audio/*">
+        </div>
+    </div>
+    <div id="audio-controls">
+        <button id="play-pause-btn" class="audio-btn">▶</button>
+        <div id="progress-container">
+            <div id="progress-bar"></div>
+        </div>
+        <span id="time-display">0:00 / 0:00</span>
+        <input type="range" id="volume-slider" min="0" max="1" step="0.05" value="1">
     </div>
     <div id="canvas-container"></div>
     <div id="info">Double-cliquez: Plein Écran • Wormhole infini • Menu en haut</div>
@@ -103,10 +147,21 @@
         const sensSlider = document.getElementById('sens');
         const speedSlider = document.getElementById('speed');
         const startBtn = document.getElementById('start-btn');
+        const fileBtn = document.getElementById('file-btn');
+        const fileInput = document.getElementById('file-input');
+        const audioControls = document.getElementById('audio-controls');
+        const playPauseBtn = document.getElementById('play-pause-btn');
+        const progressContainer = document.getElementById('progress-container');
+        const progressBar = document.getElementById('progress-bar');
+        const timeDisplay = document.getElementById('time-display');
+        const volumeSlider = document.getElementById('volume-slider');
 
         let audioCtx, analyser, dataArr, audioActive = false;
         let bass = 0, treble = 0;
         let timeout;
+        let audioElement = null;
+        let audioSource = null;
+        let isPlaying = false;
 
         function showPanel() {
             panel.style.top = '0';
@@ -116,6 +171,12 @@
         hoverZone.onmouseenter = showPanel;
         panel.onmouseenter = showPanel;
         panel.onmousemove = showPanel;
+
+        function formatTime(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${mins}:${secs.toString().padStart(2, '0')}`;
+        }
 
         async function initAudio() {
             try {
@@ -131,6 +192,104 @@
             } catch (e) { alert("Erreur: Avez-vous coché 'Partager l'audio'? " + e.message); }
         }
         startBtn.onclick = initAudio;
+
+        // File audio handling
+        fileBtn.onclick = () => fileInput.click();
+
+        fileInput.onchange = async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            try {
+                // Create audio context if needed
+                if (!audioCtx) {
+                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+
+                // Resume audio context if suspended
+                if (audioCtx.state === 'suspended') {
+                    await audioCtx.resume();
+                }
+
+                // Create audio element
+                if (audioElement) {
+                    audioElement.pause();
+                    audioElement.src = '';
+                }
+
+                audioElement = new Audio();
+                audioElement.src = URL.createObjectURL(file);
+                audioElement.volume = volumeSlider.value;
+
+                // Setup analyser
+                analyser = audioCtx.createAnalyser();
+                analyser.fftSize = 512;
+                dataArr = new Uint8Array(analyser.frequencyBinCount);
+
+                // Connect audio element to analyser
+                if (audioSource) {
+                    audioSource.disconnect();
+                }
+                audioSource = audioCtx.createMediaElementSource(audioElement);
+                audioSource.connect(analyser);
+                analyser.connect(audioCtx.destination);
+
+                // Start playback
+                await audioElement.play();
+                isPlaying = true;
+                audioActive = true;
+                playPauseBtn.textContent = '⏸';
+
+                // Show controls, hide overlay
+                overlay.classList.add('hidden');
+                audioControls.classList.add('visible');
+
+                // Update progress
+                audioElement.ontimeupdate = () => {
+                    const progress = (audioElement.currentTime / audioElement.duration) * 100;
+                    progressBar.style.width = `${progress}%`;
+                    timeDisplay.textContent = `${formatTime(audioElement.currentTime)} / ${formatTime(audioElement.duration)}`;
+                };
+
+                // Handle end of track
+                audioElement.onended = () => {
+                    isPlaying = false;
+                    playPauseBtn.textContent = '▶';
+                };
+
+            } catch (e) {
+                alert("Erreur lors du chargement du fichier audio: " + e.message);
+            }
+        };
+
+        // Play/Pause control
+        playPauseBtn.onclick = () => {
+            if (!audioElement) return;
+
+            if (isPlaying) {
+                audioElement.pause();
+                playPauseBtn.textContent = '▶';
+            } else {
+                audioElement.play();
+                playPauseBtn.textContent = '⏸';
+            }
+            isPlaying = !isPlaying;
+        };
+
+        // Progress bar seeking
+        progressContainer.onclick = (e) => {
+            if (!audioElement) return;
+            const rect = progressContainer.getBoundingClientRect();
+            const pos = (e.clientX - rect.left) / rect.width;
+            audioElement.currentTime = pos * audioElement.duration;
+        };
+
+        // Volume control
+        volumeSlider.oninput = () => {
+            if (audioElement) {
+                audioElement.volume = volumeSlider.value;
+            }
+        };
 
         const scene = new THREE.Scene();
         const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
