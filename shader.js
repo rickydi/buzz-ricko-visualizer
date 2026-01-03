@@ -16,232 +16,271 @@ float hash21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453
 mat2 rot(float a) { float s = sin(a), c = cos(a); return mat2(c, -s, s, c); }
 vec3 pal(float t, vec3 a, vec3 b, vec3 c, vec3 d) { return a + b * cos(TAU * (c * t + d)); }
 
-// Bruit et FBM pour les textures
-float noise(vec2 p) { 
-    vec2 i = floor(p); 
-    vec2 f = fract(p); 
-    f = f * f * (3.0 - 2.0 * f); 
-    return mix(mix(hash21(i), hash21(i + vec2(1,0)), f.x), 
-               mix(hash21(i + vec2(0,1)), hash21(i + vec2(1,1)), f.x), f.y); 
+// Bruit Simplex amélioré pour effet aquarelle
+float noise(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    f = f * f * f * (f * (f * 6.0 - 15.0) + 10.0); // Quintic interpolation plus douce
+    return mix(mix(hash21(i), hash21(i + vec2(1,0)), f.x),
+               mix(hash21(i + vec2(0,1)), hash21(i + vec2(1,1)), f.x), f.y);
 }
 
-float fbm(vec2 p) { 
-    float v = 0.0, a = 0.5; 
-    for (int i = 0; i < 4; i++) { 
-        v += a * noise(p); 
-        p *= 2.0; 
-        a *= 0.5; 
-    } 
-    return v; 
+// FBM aquarelle avec plus d'octaves et variation
+float fbmWater(vec2 p, float t) {
+    float v = 0.0, a = 0.5;
+    mat2 m = mat2(1.6, 1.2, -1.2, 1.6);
+    for (int i = 0; i < 6; i++) {
+        v += a * noise(p + t * 0.05);
+        p = m * p + t * 0.02;
+        a *= 0.5;
+    }
+    return v;
 }
 
-// Générateur de motifs pour les 100 effets
+// Bruit de Voronoi pour effet cellulaire aquarelle
+float voronoi(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    float minDist = 1.0;
+    for (int y = -1; y <= 1; y++) {
+        for (int x = -1; x <= 1; x++) {
+            vec2 neighbor = vec2(float(x), float(y));
+            vec2 point = hash21(i + neighbor) * 0.5 + 0.5;
+            float d = length(neighbor + point - f);
+            minDist = min(minDist, d);
+        }
+    }
+    return minDist;
+}
+
+// Effet de diffusion d'encre dans l'eau
+vec3 inkDiffusion(vec2 uv, float t, float b) {
+    vec2 p = uv;
+
+    // Mouvement organique lent
+    p += vec2(
+        fbmWater(uv * 2.0 + t * 0.1, t),
+        fbmWater(uv * 2.0 + 100.0 - t * 0.1, t)
+    ) * 0.4;
+
+    // Couches de diffusion
+    float ink1 = fbmWater(p * 3.0, t * 0.3);
+    float ink2 = fbmWater(p * 2.0 + 50.0, t * 0.2);
+    float ink3 = fbmWater(p * 4.0 - 30.0, t * 0.4);
+
+    // Mélange aquarelle avec bords doux
+    ink1 = smoothstep(0.3, 0.7, ink1);
+    ink2 = smoothstep(0.2, 0.8, ink2);
+    ink3 = smoothstep(0.4, 0.6, ink3);
+
+    return vec3(ink1, ink2, ink3);
+}
+
+// Générateur de motifs aquarelle
 vec3 getPattern(vec2 uv, float t, int id, float b, float tr) {
     float fid = float(id);
-    float h = hash(fid); // Graine unique pour cet effet
-    
-    // 1. Configuration de la symétrie (Kaléidoscope)
-    float segments = floor(3.0 + hash(fid * 12.3) * 8.0); // Entre 3 et 10 segments
-    if (mod(fid, 5.0) == 0.0) segments *= 2.0; // Parfois beaucoup plus
-    
+    float h = hash(fid);
+
+    // Symétrie kaléidoscope plus fluide
+    float segments = floor(3.0 + hash(fid * 12.3) * 5.0);
+
     float angle = atan(uv.y, uv.x);
     float radius = length(uv);
-    
-    // Rotation globale
-    float rotSpeed = (hash(fid * 2.1) - 0.5) * 0.5 * uSpeed;
+
+    // Rotation très lente et organique
+    float rotSpeed = (hash(fid * 2.1) - 0.5) * 0.2 * uSpeed;
     angle += t * rotSpeed;
-    
-    // Application de la symétrie
+
+    // Symétrie douce
     float segmentAngle = TAU / segments;
     float a = mod(angle, segmentAngle);
     a = abs(a - segmentAngle * 0.5);
-    
-    // Coordonnées transformées
+
     vec2 p = vec2(cos(a), sin(a)) * radius;
-    
-    // 2. Définition de la forme et de la texture (STYLE AQUARELLE/LIQUIDE)
+
     float val = 0.0;
-    int type = int(mod(fid, 10.0)); // 10 types de base
-    
-    // Déformation liquide générale (PLUS INTENSE)
+    int type = int(mod(fid, 10.0));
+
+    // Déformation liquide intense style aquarelle
     vec2 q = p;
-    float liquid = fbm(p * 3.0 + t * 0.2);
-    q += vec2(cos(liquid * 5.0 + t), sin(liquid * 5.0)) * 0.3;
-    
-    // Distorsion supplémentaire pour effet "huile dans l'eau"
-    q += vec2(fbm(q * 2.0 - t * 0.1), fbm(q * 2.0 + t * 0.1)) * 0.5;
-    
-    // On remplace les formes géométriques dures par des variations fluides
-    if (type == 0) { // Vagues douces
-        val = fbm(q * 3.0 + t * 0.2);
-    } else if (type == 1) { // Gouttes d'encre
-        val = length(q) - fbm(q * 5.0 - t);
-        val = smoothstep(0.4, 0.6, val);
+    float flow1 = fbmWater(p * 2.0 + t * 0.1, t);
+    float flow2 = fbmWater(p * 1.5 - t * 0.08, t);
+    q += vec2(flow1, flow2) * 0.6;
+
+    // Deuxième couche de déformation pour plus de fluidité
+    q += vec2(
+        sin(flow1 * TAU + t * 0.2),
+        cos(flow2 * TAU - t * 0.15)
+    ) * 0.3;
+
+    // Effets aquarelle selon le type
+    if (type == 0) { // Encre diffuse
+        float ink = fbmWater(q * 2.5, t * 0.2);
+        float edges = fbmWater(q * 5.0 + 20.0, t * 0.3);
+        val = ink + edges * 0.3;
+        val = smoothstep(0.2, 0.8, val);
+    } else if (type == 1) { // Gouttes qui se mélangent
+        float drops = voronoi(q * 3.0 + t * 0.1);
+        float blend = fbmWater(q * 2.0, t * 0.2);
+        val = mix(drops, blend, 0.6);
+        val = pow(val, 0.8);
     } else if (type == 2) { // Marbre liquide
-        val = fbm(p * 2.0 + fbm(p * 4.0 + t * 0.1));
-    } else if (type == 3) { // Flux d'énergie doux
-        val = abs(sin(q.x * 10.0 + t * 0.5 + b)) * 0.5 + 0.5;
-    } else if (type == 4) { // Nuages colorés
-        val = fbm(q * 4.0) * fbm(q * 2.0 - t * 0.1);
-    } else if (type == 5) { // Fleurs d'eau
+        float marble = fbmWater(p * 1.5 + fbmWater(p * 3.0 + t * 0.05, t) * 2.0, t * 0.1);
+        val = sin(marble * PI * 3.0) * 0.5 + 0.5;
+    } else if (type == 3) { // Flux d'eau colorée
+        float stream = sin(q.x * 4.0 + fbmWater(q * 3.0, t) * 3.0 + t * 0.3);
+        val = stream * 0.5 + 0.5;
+        val = smoothstep(0.1, 0.9, val);
+    } else if (type == 4) { // Nuages de pigment
+        val = fbmWater(q * 3.0, t * 0.15) * fbmWater(q * 2.0 + 50.0, t * 0.1);
+        val = pow(val, 0.6);
+    } else if (type == 5) { // Fleurs d'encre
         float r = length(q);
         float an = atan(q.y, q.x);
-        val = sin(r * 10.0 - t + 2.0 * sin(an * 5.0));
-    } else if (type == 6) { // Plasma soft
-        val = sin(q.x * 5.0 + t) * sin(q.y * 5.0 + t * 0.8);
-        val = val * 0.5 + 0.5;
-    } else if (type == 7) { // Tourbillon zen
-        float an = atan(q.y, q.x) + length(q) * 2.0;
-        val = sin(an * 3.0 - t);
-    } else if (type == 8) { // Diffusion d'encre
-        val = fbm(uv * 3.0 + t * 0.1);
+        float petals = sin(an * 5.0 + fbmWater(q * 2.0, t) * 2.0);
+        float bloom = sin(r * 6.0 - t * 0.3 + petals * 2.0);
+        val = bloom * 0.5 + 0.5;
         val = smoothstep(0.2, 0.8, val);
+    } else if (type == 6) { // Ondulations douces
+        float wave1 = sin(q.x * 3.0 + fbmWater(q, t) * 4.0 + t * 0.2);
+        float wave2 = sin(q.y * 3.0 + fbmWater(q + 30.0, t) * 4.0 + t * 0.25);
+        val = (wave1 + wave2) * 0.25 + 0.5;
+    } else if (type == 7) { // Tourbillon aquarelle
+        float an = atan(q.y, q.x) + length(q) * 3.0;
+        float swirl = sin(an * 2.0 - t * 0.2 + fbmWater(q * 2.0, t) * 2.0);
+        val = swirl * 0.5 + 0.5;
+        val = smoothstep(0.15, 0.85, val);
+    } else if (type == 8) { // Taches qui fusionnent
+        float blobs = 1.0 - voronoi(q * 2.5 + fbmWater(q, t) * 0.5);
+        float diffuse = fbmWater(q * 3.0 + t * 0.1, t);
+        val = blobs * 0.7 + diffuse * 0.3;
+        val = smoothstep(0.1, 0.9, val);
     } else { // Nébuleuse liquide
-        val = fbm(q * 2.5 - t * 0.15 + b);
+        float neb = fbmWater(q * 2.0 - t * 0.1, t);
+        float detail = fbmWater(q * 5.0 + t * 0.15, t);
+        val = neb * 0.8 + detail * 0.2;
     }
-    
-    // Contraste plus fort sur les formes liquides
-    val = smoothstep(-0.2, 1.2, val);
-    val = pow(val, 1.2); // Assombrir les tons moyens
-    
-    // Réaction audio PLUS DOUCE et FLUIDE sur la forme
-    val += b * 0.3 * sin(t * 2.0 + length(p)*5.0); // Ondulation basse fréq
-    val += tr * 0.1 * fbm(p * 10.0 + t); // Scintillement hautes fréq
-    
-    // 3. Colorisation (Palette procédurale)
-    vec3 c1 = vec3(hash(fid), hash(fid + 0.1), hash(fid + 0.2));
-    vec3 c2 = vec3(hash(fid + 0.3), hash(fid + 0.4), hash(fid + 0.5));
-    vec3 c3 = vec3(1.0);
-    vec3 c4 = vec3(0.0, 0.33, 0.67); // Phase par défaut
-    
-    // Variation des palettes
-    if (hash(fid * 5.5) > 0.5) c4 = vec3(0.5, 0.2, 0.25);
-    if (hash(fid * 6.6) > 0.5) c3 = vec3(2.0, 1.0, 0.0);
-    
-    vec3 col = pal(val + t * 0.1 + radius, c1, c2, c3, c4);
-    
-    // Assombrir les bords de la cellule de symétrie (vignettage sectoriel plus DOUX pour éviter les limites dures)
-    col *= smoothstep(segmentAngle * 0.8, 0.0, a);
-    
-    // Assombrir globalement pour le contraste
-    col *= 0.8;
-    
+
+    // Bords aquarelle naturels (jamais de lignes dures)
+    val = smoothstep(0.0, 1.0, val);
+
+    // Réaction audio fluide
+    val += b * 0.2 * sin(t * 1.5 + length(p) * 3.0 + fbmWater(p * 2.0, t) * 2.0);
+    val += tr * 0.1 * fbmWater(p * 8.0 + t * 0.5, t);
+
+    // Palette de couleurs aquarelle (tons doux et translucides)
+    vec3 c1 = vec3(0.5 + hash(fid) * 0.3, 0.4 + hash(fid + 0.1) * 0.3, 0.6 + hash(fid + 0.2) * 0.3);
+    vec3 c2 = vec3(0.4 + hash(fid + 0.3) * 0.4, 0.5 + hash(fid + 0.4) * 0.3, 0.4 + hash(fid + 0.5) * 0.4);
+    vec3 c3 = vec3(1.0, 0.8, 0.6);
+    vec3 c4 = vec3(0.0, 0.25, 0.5);
+
+    if (hash(fid * 5.5) > 0.5) c4 = vec3(0.3, 0.1, 0.4);
+    if (hash(fid * 6.6) > 0.5) c3 = vec3(0.8, 1.0, 0.7);
+
+    vec3 col = pal(val + t * 0.05 + radius * 0.3, c1, c2, c3, c4);
+
+    // Effet translucide aquarelle
+    col = mix(col, col * col, 0.3);
+
+    // Vignette sectorielle très douce
+    col *= smoothstep(segmentAngle * 0.9, 0.0, a);
+
+    // Luminosité globale
+    col *= 0.85;
+
     return col;
 }
 
-// Fonction pour rendre un effet complet (tunnel de couches)
+// Rendu avec effet de couches translucides
 vec3 renderLayeredEffect(vec2 uv, float t, int id, float b, float tr, float globalZoom) {
-    vec3 finalCol = vec3(0.0); // Fond NOIR profond par défaut
-    float totalDensity = 0.0;
-    
-    // Paramètres déduits de l'ID
+    vec3 finalCol = vec3(0.0);
+
     float fid = float(id);
-    float layers = 4.0 + floor(hash(fid) * 4.0); // 4 à 8 couches
-    float depthSpeed = 0.5 + hash(fid * 2.0) * 0.5;
-    
-    for (float i = 0.0; i < 6.0; i++) {
+    float layers = 5.0 + floor(hash(fid) * 3.0);
+    float depthSpeed = 0.3 + hash(fid * 2.0) * 0.3;
+
+    for (float i = 0.0; i < 8.0; i++) {
         if (i >= layers) break;
 
-        // Réactivité audio sur la vitesse de profondeur (BOOM sur les basses)
-        float audioZoom = t * depthSpeed * uSpeed + b * 0.2 * uSpeed; 
-        
-        // Profondeur allant de 0 (loin/centre) à 1 (proche/bord)
-        // "+ t" assure un mouvement vers l'avant (SORTIE du centre)
+        float audioZoom = t * depthSpeed * uSpeed + b * 0.15 * uSpeed;
         float depth = mod(audioZoom + i / layers + globalZoom, 1.0);
-        
-        // Z diminue quand on se rapproche (depth augmente) -> l'objet grossit à l'écran
         float z = 1.0 / max(0.01, depth);
-        
-        // Fade in au centre (0) et Fade out quand ça passe la caméra (1)
-        // Fade out plus rapide pour laisser plus de noir
-        float fade = smoothstep(0.05, 0.2, depth) * smoothstep(1.0, 0.4, depth);
-        
-        vec2 p = uv * z * 0.5; 
-        
-        // Réactivité audio sur la rotation
-        float audioRot = t + b * 0.5;
-        p *= rot(audioRot * (hash(fid + i) - 0.5) * 0.5); 
-        
+
+        // Fade plus doux pour effet aquarelle
+        float fade = smoothstep(0.02, 0.25, depth) * smoothstep(1.0, 0.35, depth);
+        fade = pow(fade, 0.8); // Plus de transparence
+
+        vec2 p = uv * z * 0.4;
+
+        // Rotation organique lente
+        float audioRot = t * 0.3 + b * 0.3;
+        p *= rot(audioRot * (hash(fid + i) - 0.5) * 0.3);
+
         vec3 col = getPattern(p, t + i * 100.0, id, b, tr);
-        
-        // Flash sur les Basses (ATTTENUE)
-        col *= (1.0 + b * 0.2);
-        
-        // Mélange additif plus sélectif pour garder le contraste
-        finalCol += col * fade * (1.0 / (1.0 + z * 0.2)); 
+
+        // Réaction audio subtile
+        col *= (1.0 + b * 0.15);
+
+        // Mélange translucide
+        finalCol += col * fade * (1.0 / (1.0 + z * 0.3));
     }
-    
-    // Glow central beaucoup plus subtil
-    finalCol += vec3(hash(fid*4.0), hash(fid*4.1), hash(fid*4.2)) * (0.02 / length(uv)) * (0.5 + b * 0.5);
-    
+
+    // Glow central très subtil
+    float glow = 0.015 / (length(uv) + 0.1);
+    finalCol += vec3(hash(fid*4.0), hash(fid*4.1), hash(fid*4.2)) * glow * (0.3 + b * 0.3);
+
     return finalCol;
 }
 
 void main() {
     vec2 uv = (gl_FragCoord.xy * 2.0 - iResolution.xy) / iResolution.y;
     float t = iTime;
-    
-    // Gestion des indices d'effets pour la transition
-    float duration = 10.0; // Durée par effet
-    float transition = 3.0; // Durée de transition
-    
+
+    float duration = 12.0; // Plus long pour apprécier l'effet aquarelle
+    float transition = 4.0; // Transitions plus douces
+
     float globalTime = t;
     float cycle = duration + transition;
-    
+
     float timeInCycle = mod(globalTime, cycle);
     int currentIdx = int(floor(globalTime / cycle));
     int nextIdx = currentIdx + 1;
-    
-    // Limiter aux 100 effets
+
     int id1 = currentIdx - (currentIdx / 100) * 100;
     int id2 = nextIdx - (nextIdx / 100) * 100;
-    
+
     vec3 col = vec3(0.0);
-    
+
     if (timeInCycle < duration) {
-        // Effet stable
-        // On passe un "zoom" qui avance doucement pour que ce soit vivant
         col = renderLayeredEffect(uv, t, id1, uBass * uSensitivity, uTreble * uSensitivity, 0.0);
     } else {
-        // Transition
-        float transT = (timeInCycle - duration) / transition; // 0.0 à 1.0
+        float transT = (timeInCycle - duration) / transition;
         transT = smoothstep(0.0, 1.0, transT);
-        
-        // Effet de zoom accéléré vers le centre (trou noir)
-        // L'image actuelle zoome vers l'intérieur (disparait au centre) ou l'extérieur
-        
-        // Transition : Accélération vers l'avant (WARPSPEED)
-        
-        // L'effet actuel accélère vers nous (avance dans le temps/profondeur)
-        float zoom1 = transT * 2.0; 
+        transT = transT * transT * (3.0 - 2.0 * transT); // Smoothstep supplémentaire
+
+        float zoom1 = transT * 1.5;
         vec3 c1 = renderLayeredEffect(uv, t, id1, uBass * uSensitivity, uTreble * uSensitivity, zoom1);
-        
-        // Le nouvel effet arrive du loin (centre)
-        // On le décale négativement pour qu'il semble venir de très loin
-        float zoom2 = (transT - 1.0) * 2.0; 
-        
-        // Rotation pendant la transition
-        vec2 uv2 = uv * rot(transT * PI * 0.5);
+
+        float zoom2 = (transT - 1.0) * 1.5;
+        vec2 uv2 = uv * rot(transT * PI * 0.3);
         vec3 c2 = renderLayeredEffect(uv2, t, id2, uBass * uSensitivity, uTreble * uSensitivity, zoom2);
-        
-        // Fondu non-linéaire pour une sensation d'immersion
-        float alpha = smoothstep(0.2, 0.8, transT);
+
+        float alpha = smoothstep(0.15, 0.85, transT);
         col = mix(c1, c2, alpha);
-        
-        // Flash atténué et coloré (moins agressif pour les yeux)
+
+        // Flash très subtil
         float flash = sin(transT * PI);
-        flash = pow(flash, 10.0) * 0.2; // Moins intense
-        col += pal(t * 0.1, vec3(0.5), vec3(0.5), vec3(1.0), vec3(0.0, 0.3, 0.6)) * flash;
+        flash = pow(flash, 12.0) * 0.1;
+        col += pal(t * 0.05, vec3(0.5), vec3(0.3), vec3(1.0), vec3(0.1, 0.2, 0.4)) * flash;
     }
-    
-    // Vignette adaptée aux écrans ultra-larges (45" curved)
-    // On repousse le noir très loin pour ne pas couper les bords sur du 32:9
+
+    // Vignette douce
     float maxDist = iResolution.x / iResolution.y * 0.8 + 1.0;
-    col *= smoothstep(maxDist, maxDist * 0.4, length(uv));
-    
-    // Augmentation du contraste global
-    col = pow(col, vec3(1.3)); // Gamma plus élevé = plus sombre/contrasté
-    col *= 1.2; // Compenser un peu l'assombrissement
+    col *= smoothstep(maxDist, maxDist * 0.3, length(uv));
+
+    // Contraste doux style aquarelle
+    col = pow(col, vec3(1.1));
+    col *= 1.1;
     col = clamp(col, 0.0, 1.0);
 
     gl_FragColor = vec4(col, 1.0);
