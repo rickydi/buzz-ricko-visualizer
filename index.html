@@ -93,6 +93,15 @@
         #time-display { color: #888; font-size: 12px; min-width: 80px; text-align: center; }
         #volume-slider { width: 80px; accent-color: #0af; }
         #info { position: fixed; bottom: 15px; left: 50%; transform: translateX(-50%); color: rgba(255,255,255,0.3); font-size: 11px; z-index: 10; text-align: center; pointer-events: none; }
+        #style-display {
+            position: fixed; top: 20px; right: 20px; color: rgba(255,255,255,0.8);
+            font-size: 16px; z-index: 100; text-align: right; pointer-events: none;
+            background: rgba(0,0,0,0.6); padding: 10px 15px; border-radius: 8px;
+            font-family: 'Courier New', monospace; display: none;
+        }
+        #style-display.visible { display: block; }
+        #style-display .style-num { color: #0f0; font-weight: bold; font-size: 20px; }
+        #style-display .style-name { color: #fff; display: block; margin-top: 5px; }
         .hidden { opacity: 0; pointer-events: none; }
         @media (max-width: 600px) {
             #control-panel { gap: 25px; padding: 10px; }
@@ -136,7 +145,8 @@
         <input type="range" id="volume-slider" min="0" max="1" step="0.05" value="1">
     </div>
     <div id="canvas-container"></div>
-    <div id="info">Double-cliquez: Plein Écran • Wormhole infini • Menu en haut</div>
+    <div id="style-display"><span class="style-num">1/30</span><span class="style-name">Encre Diffuse</span></div>
+    <div id="info">Double-cliquez: Plein Écran • 30 Styles • Menu en haut</div>
 
     <script src="shader.js"></script>
     <script>
@@ -163,6 +173,17 @@
         let audioElement = null;
         let audioSource = null;
         let isPlaying = false;
+
+        const styleDisplay = document.getElementById('style-display');
+        const styleNames = [
+            "Encre Diffuse", "Gouttes Mélangées", "Marbre Liquide", "Flux Coloré", "Nuages Pigment",
+            "Fleurs d'Encre", "Ondulations", "Tourbillon", "Taches Fusion", "Nébuleuse",
+            "Vagues Horizontales", "Vagues Verticales", "Vagues Croisées", "Vagues Circulaires", "Vagues Spirales",
+            "Kaléido Simple", "Kaléido Rotatif", "Kaléido Plasma", "Kaléido Fluide", "Kaléido Géométrique",
+            "Tunnel Infini", "Hypnotique", "Cellules Vivantes", "Diamant", "Morphing",
+            "Aurora", "Fractal", "Plasma Radial", "Interférence", "Cosmos"
+        ];
+        let lastStyle = -1;
 
         function showPanel() {
             panel.style.top = '0';
@@ -334,6 +355,16 @@
                 // Smoothing rapide pour réactivité
                 bass += (b - bass) * 0.5;
                 treble += (tr - treble) * 0.6;
+
+                // Afficher le style actuel
+                styleDisplay.classList.add('visible');
+                const time = s * parseFloat(speedSlider.value);
+                const cycleDuration = 17.0; // 15s + 2s transition
+                const currentStyle = Math.floor((time % (cycleDuration * 30)) / cycleDuration);
+                if (currentStyle !== lastStyle) {
+                    lastStyle = currentStyle;
+                    styleDisplay.innerHTML = `<span class="style-num">${currentStyle + 1}/30</span><span class="style-name">${styleNames[currentStyle]}</span>`;
+                }
             }
 
             uniforms.iTime.value = s;

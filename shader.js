@@ -99,7 +99,7 @@ vec3 getPattern(vec2 uv, float t, int id, float b, float tr) {
     vec2 p = vec2(cos(a), sin(a)) * radius;
 
     float val = 0.0;
-    int type = int(mod(fid, 10.0));
+    int type = int(mod(fid, 30.0));
 
     // Déformation liquide intense style aquarelle
     vec2 q = p;
@@ -155,10 +155,88 @@ vec3 getPattern(vec2 uv, float t, int id, float b, float tr) {
         float diffuse = fbmWater(q * 3.0 + t * 0.1, t);
         val = blobs * 0.7 + diffuse * 0.3;
         val = smoothstep(0.1, 0.9, val);
-    } else { // Nébuleuse liquide
+    } else if (type == 9) { // Nébuleuse liquide
         float neb = fbmWater(q * 2.0 - t * 0.1, t);
         float detail = fbmWater(q * 5.0 + t * 0.15, t);
         val = neb * 0.8 + detail * 0.2;
+    }
+    // 10-14: Vagues et ondulations
+    else if (type == 10) { // Vagues horizontales
+        val = sin(q.y * 8.0 + fbmWater(q * 2.0, t) * 3.0 + t * 0.5) * 0.5 + 0.5;
+    } else if (type == 11) { // Vagues verticales
+        val = sin(q.x * 8.0 + fbmWater(q * 2.0, t) * 3.0 - t * 0.4) * 0.5 + 0.5;
+    } else if (type == 12) { // Vagues croisées
+        float w1 = sin(q.x * 5.0 + t * 0.3);
+        float w2 = sin(q.y * 5.0 - t * 0.25);
+        val = (w1 * w2) * 0.5 + 0.5;
+    } else if (type == 13) { // Vagues circulaires
+        val = sin(length(q) * 12.0 - t * 2.0 + fbmWater(q, t) * 2.0) * 0.5 + 0.5;
+    } else if (type == 14) { // Vagues spirales
+        float an = atan(q.y, q.x);
+        val = sin(an * 3.0 + length(q) * 8.0 - t * 1.5) * 0.5 + 0.5;
+    }
+    // 15-19: Kaléidoscopes
+    else if (type == 15) { // Kaléido simple
+        float ka = mod(atan(q.y, q.x), PI / 4.0);
+        val = sin(ka * 10.0 + length(q) * 5.0 + t) * 0.5 + 0.5;
+    } else if (type == 16) { // Kaléido rotatif
+        float ka = mod(atan(q.y, q.x) + t * 0.2, PI / 6.0);
+        val = fbmWater(vec2(ka, length(q)) * 3.0, t) ;
+    } else if (type == 17) { // Kaléido plasma
+        float ka = mod(atan(q.y, q.x), PI / 5.0);
+        vec2 kp = vec2(cos(ka), sin(ka)) * length(q);
+        val = sin(kp.x * 8.0 + t) * sin(kp.y * 8.0 + t * 0.9) * 0.5 + 0.5;
+    } else if (type == 18) { // Kaléido fluide
+        float ka = mod(atan(q.y, q.x), PI / 3.0);
+        vec2 kp = vec2(cos(ka), sin(ka)) * length(q);
+        kp += fbmWater(kp * 2.0, t) * 0.3;
+        val = fbmWater(kp * 4.0, t * 0.5);
+    } else if (type == 19) { // Kaléido géométrique
+        float ka = mod(atan(q.y, q.x), PI / 8.0);
+        val = step(0.5, sin(ka * 20.0 + length(q) * 10.0 + t));
+        val = smoothstep(0.0, 0.1, val);
+    }
+    // 20-24: Effets spéciaux
+    else if (type == 20) { // Tunnel infini
+        float tunnel = 1.0 / (length(q) + 0.1);
+        val = sin(tunnel * 3.0 + atan(q.y, q.x) * 2.0 - t * 2.0) * 0.5 + 0.5;
+    } else if (type == 21) { // Hypnotique
+        val = sin(atan(q.y, q.x) * 8.0 + sin(length(q) * 5.0 + t) * 3.0 - t) * 0.5 + 0.5;
+    } else if (type == 22) { // Cellules vivantes
+        float cells = voronoi(q * 4.0 + t * 0.2);
+        val = 1.0 - cells;
+        val = pow(val, 1.5);
+    } else if (type == 23) { // Diamant
+        float diamond = abs(q.x) + abs(q.y);
+        val = sin(diamond * 8.0 - t * 2.0 + sin(atan(q.y, q.x) * 4.0) * 2.0) * 0.5 + 0.5;
+    } else if (type == 24) { // Morphing
+        float morph = fbmWater(q * 2.0 + t * 0.1, t);
+        vec2 mp = q + vec2(cos(morph * TAU), sin(morph * TAU)) * 0.4;
+        val = sin(mp.x * 5.0 + t) * sin(mp.y * 5.0 + t * 0.8) * 0.5 + 0.5;
+    }
+    // 25-29: Abstraits
+    else if (type == 25) { // Aurora
+        val = fbmWater(q * 1.5 + vec2(t * 0.1, 0.0), t) * fbmWater(q * 2.0 - vec2(0.0, t * 0.08), t);
+        val = pow(val, 0.5);
+    } else if (type == 26) { // Fractal simple
+        vec2 z = q * 2.0;
+        for (int i = 0; i < 5; i++) {
+            z = vec2(z.x * z.x - z.y * z.y, 2.0 * z.x * z.y) + q + t * 0.05;
+        }
+        val = length(z) * 0.1;
+        val = sin(val * PI) * 0.5 + 0.5;
+    } else if (type == 27) { // Plasma radial
+        val = sin(length(q) * 10.0 + t) + sin(atan(q.y, q.x) * 5.0 + t * 0.7);
+        val = val * 0.25 + 0.5;
+    } else if (type == 28) { // Interference
+        float d1 = length(q - vec2(0.3, 0.0));
+        float d2 = length(q + vec2(0.3, 0.0));
+        val = sin(d1 * 15.0 - t * 2.0) + sin(d2 * 15.0 - t * 2.0);
+        val = val * 0.25 + 0.5;
+    } else { // 29: Cosmos
+        float stars = pow(fbmWater(q * 5.0, t * 0.1), 3.0);
+        float nebula = fbmWater(q * 1.5, t * 0.2);
+        val = stars * 0.5 + nebula * 0.5;
     }
 
     // Bords aquarelle naturels (jamais de lignes dures)
@@ -236,18 +314,16 @@ void main() {
     vec2 uv = (gl_FragCoord.xy * 2.0 - iResolution.xy) / iResolution.y;
     float t = iTime;
 
-    float duration = 12.0; // Plus long pour apprécier l'effet aquarelle
-    float transition = 4.0; // Transitions plus douces
+    float duration = 15.0; // 15 secondes par style
+    float transition = 2.0; // 2 secondes de transition
+    float totalStyles = 30.0; // 30 styles différents
 
     float globalTime = t;
     float cycle = duration + transition;
 
     float timeInCycle = mod(globalTime, cycle);
-    int currentIdx = int(floor(globalTime / cycle));
-    int nextIdx = currentIdx + 1;
-
-    int id1 = currentIdx - (currentIdx / 100) * 100;
-    int id2 = nextIdx - (nextIdx / 100) * 100;
+    int currentIdx = int(mod(floor(globalTime / cycle), totalStyles));
+    int nextIdx = int(mod(float(currentIdx) + 1.0, totalStyles));
 
     vec3 col = vec3(0.0);
 
