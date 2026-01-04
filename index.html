@@ -73,6 +73,19 @@
         .btn-container { display: flex; flex-direction: column; gap: 10px; align-items: center; }
         .separator { color: #666; margin: 15px 0 5px 0; font-size: 14px; }
         #file-input { display: none; }
+        #countdown {
+            font-size: clamp(4rem, 15vw, 10rem);
+            color: #0f0;
+            text-shadow: 0 0 40px #0f0, 0 0 80px #0f0;
+            margin: 30px 0;
+            font-weight: bold;
+            animation: pulse 1s ease-in-out infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.1); opacity: 0.8; }
+        }
+        .btn-container.disabled { opacity: 0.3; pointer-events: none; }
         #audio-controls {
             position: fixed; bottom: 50px; left: 50%; transform: translateX(-50%);
             background: rgba(0,0,0,0.85); backdrop-filter: blur(10px);
@@ -123,10 +136,11 @@
         <canvas id="fireworks-canvas"></canvas>
         <h1>BUZZ RICKO</h1>
         <div style="color: #666; font-size: 12px; margin-top: -20px; margin-bottom: 20px;">v1.5</div>
+        <div id="countdown">10</div>
         <div class="step">1. Cliquez sur le bouton ci-dessous</div>
         <div class="step">2. Sélectionnez l'<span class="hl">onglet ou l'écran</span> avec la musique</div>
         <div class="step">3. <span class="hl" style="text-decoration:underline;">Cochez "Partager l'audio"</span></div>
-        <div class="btn-container">
+        <div class="btn-container disabled" id="btn-container">
             <button id="start-btn" class="btn-action">Connecter l'Audio</button>
             <div class="separator">— ou —</div>
             <button id="file-btn" class="btn-action btn-secondary">Charger un Fichier Audio</button>
@@ -339,6 +353,24 @@
         const progressBar = document.getElementById('progress-bar');
         const timeDisplay = document.getElementById('time-display');
         const volumeSlider = document.getElementById('volume-slider');
+        const countdownEl = document.getElementById('countdown');
+        const btnContainer = document.getElementById('btn-container');
+
+        // Countdown de 10 secondes
+        let countdownValue = 10;
+        const countdownInterval = setInterval(() => {
+            countdownValue--;
+            if (countdownValue > 0) {
+                countdownEl.textContent = countdownValue;
+            } else {
+                countdownEl.textContent = 'GO!';
+                btnContainer.classList.remove('disabled');
+                clearInterval(countdownInterval);
+                setTimeout(() => {
+                    countdownEl.style.display = 'none';
+                }, 1000);
+            }
+        }, 1000);
 
         let audioCtx, analyser, dataArr, audioActive = false;
         let bass = 0, treble = 0;
