@@ -23,79 +23,331 @@ float noise(vec2 p) {
                mix(hash21(i + vec2(0,1)), hash21(i + vec2(1,1)), f.x), f.y);
 }
 
-float fbm(vec2 p, float t) {
-    float v = 0.0;
-    float a = 0.5;
+float fbm(vec2 p) {
+    float v = 0.0, a = 0.5;
     mat2 m = mat2(1.6, 1.2, -1.2, 1.6);
-    for (int i = 0; i < 5; i++) {
-        v += a * noise(p + t * 0.05);
-        p = m * p;
-        a *= 0.5;
-    }
+    for (int i = 0; i < 5; i++) { v += a * noise(p); p = m * p; a *= 0.5; }
     return v;
 }
 
-vec3 getStyle(vec2 uv, float t, float styleId, float bass, float treble) {
-    float h = hash(styleId);
-    float h2 = hash(styleId + 100.0);
-    float h3 = hash(styleId + 200.0);
+// 30 STYLES UNIQUES
+vec3 style0(vec2 uv, float t, float b, float tr) { // Plasma classique
+    float v = sin(uv.x * 10.0 + t) + sin(uv.y * 10.0 + t * 1.1);
+    v += sin((uv.x + uv.y) * 8.0 + t * 0.9) + sin(length(uv) * 12.0 - t);
+    v = v * 0.25 + 0.5 + b * 0.3;
+    return pal(v, vec3(0.5), vec3(0.5), vec3(1.0, 1.0, 1.0), vec3(0.0, 0.1, 0.2));
+}
 
-    // Rotation et symétrie - RÉACTIF AU BASS
-    float segments = 3.0 + floor(h * 5.0);
-    float angle = atan(uv.y, uv.x) + t * (h - 0.5) * 0.3;
-    angle += bass * 0.5; // Rotation avec bass
-    float radius = length(uv);
+vec3 style1(vec2 uv, float t, float b, float tr) { // Tunnel infini
+    float a = atan(uv.y, uv.x);
+    float r = length(uv);
+    float v = a / PI + 1.0 / r - t * 0.5;
+    v += b * 0.5;
+    return pal(v, vec3(0.5), vec3(0.5), vec3(1.0, 0.7, 0.4), vec3(0.0, 0.15, 0.2));
+}
 
-    float segAngle = TAU / segments;
-    float a = mod(angle, segAngle);
-    a = abs(a - segAngle * 0.5);
+vec3 style2(vec2 uv, float t, float b, float tr) { // Cercles concentriques
+    float r = length(uv);
+    float v = sin(r * 20.0 - t * 3.0 - b * 5.0) * 0.5 + 0.5;
+    v *= smoothstep(2.0, 0.0, r);
+    return vec3(v * 0.2, v * 0.5 + tr * 0.3, v);
+}
 
-    vec2 p = vec2(cos(a), sin(a)) * radius;
+vec3 style3(vec2 uv, float t, float b, float tr) { // Damier déformé
+    vec2 p = uv * 5.0 + vec2(sin(t), cos(t * 0.7)) * b;
+    float v = mod(floor(p.x) + floor(p.y), 2.0);
+    v = mix(v, 1.0 - v, sin(t) * 0.5 + 0.5);
+    return vec3(v, v * 0.7, v * 0.3 + tr * 0.5);
+}
 
-    // Déformation fluide - AMPLIFIÉE PAR AUDIO
-    float deform = 0.5 + bass * 0.8 + treble * 0.3;
-    float f1 = fbm(p * 2.0 + t * 0.15, t);
-    float f2 = fbm(p * 1.5 - t * 0.1, t);
-    p += vec2(f1, f2) * deform;
+vec3 style4(vec2 uv, float t, float b, float tr) { // Spirale hypnotique
+    float a = atan(uv.y, uv.x);
+    float r = length(uv);
+    float v = sin(a * 5.0 + r * 10.0 - t * 2.0 - b * 3.0);
+    return vec3(v * 0.5 + 0.5, 0.3, 0.7 + tr * 0.3);
+}
 
-    // Pulsation avec le bass
-    p *= 1.0 + bass * 0.3;
+vec3 style5(vec2 uv, float t, float b, float tr) { // Feu
+    vec2 p = uv * 3.0;
+    p.y -= t * 2.0;
+    float n = fbm(p) * fbm(p * 2.0 + t);
+    n += b * 0.4;
+    return vec3(n * 1.5, n * 0.5, n * 0.1);
+}
 
-    // Pattern avec variations
-    float freq = 2.0 + h * 4.0;
-    float val = fbm(p * freq, t * 0.2);
+vec3 style6(vec2 uv, float t, float b, float tr) { // Étoiles filantes
+    vec2 p = uv * 10.0;
+    p = fract(p) - 0.5;
+    float d = length(p);
+    float v = 0.02 / d;
+    v *= sin(t * 5.0 + uv.x * 20.0) * 0.5 + 0.5;
+    v += b * 0.3;
+    return vec3(v, v * 0.8, v * 1.2);
+}
 
-    // Vagues réactives
-    val += sin(p.x * (3.0 + h * 5.0) + f1 * 3.0 + t * 0.4 + bass * 2.0) * (0.2 + treble * 0.3);
-    val += sin(length(p) * (5.0 + h * 8.0) - t * 0.6 - bass * 3.0) * (0.15 + bass * 0.2);
-    val += sin(atan(p.y, p.x) * (2.0 + h2 * 4.0) + t * 0.3) * (0.1 + treble * 0.2);
+vec3 style7(vec2 uv, float t, float b, float tr) { // Kaléidoscope 6
+    float a = atan(uv.y, uv.x);
+    a = mod(a, PI / 3.0);
+    a = abs(a - PI / 6.0);
+    vec2 p = vec2(cos(a), sin(a)) * length(uv);
+    float v = fbm(p * 5.0 + t * 0.3);
+    v += b * 0.3;
+    return pal(v + t * 0.1, vec3(0.5), vec3(0.5), vec3(1.0, 0.5, 0.3), vec3(0.2, 0.0, 0.5));
+}
 
-    // Effet stroboscope léger avec treble
-    val += treble * 0.15 * sin(t * 8.0);
+vec3 style8(vec2 uv, float t, float b, float tr) { // Vagues océan
+    float v = 0.0;
+    for (float i = 1.0; i < 5.0; i++) {
+        v += sin(uv.x * i * 3.0 + t * i * 0.5 + b) / i;
+        v += sin(uv.y * i * 2.0 - t * i * 0.3) / i;
+    }
+    v = v * 0.3 + 0.5;
+    return vec3(0.1, 0.3 + v * 0.4, 0.5 + v * 0.5);
+}
 
-    val = smoothstep(0.15, 0.85, val + 0.3);
+vec3 style9(vec2 uv, float t, float b, float tr) { // Cellules
+    vec2 p = uv * 4.0;
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    float md = 1.0;
+    for (int y = -1; y <= 1; y++) {
+        for (int x = -1; x <= 1; x++) {
+            vec2 n = vec2(float(x), float(y));
+            vec2 pt = hash21(i + n) * 0.5 + 0.25;
+            pt += sin(t + hash21(i + n) * TAU) * 0.2 * (1.0 + b);
+            md = min(md, length(n + pt - f));
+        }
+    }
+    return vec3(md + tr * 0.3, md * 0.6, md * 0.9);
+}
 
-    // Couleurs uniques par style
-    vec3 c1 = vec3(0.5 + h * 0.3, 0.4 + h2 * 0.3, 0.6 + h3 * 0.2);
-    vec3 c2 = vec3(0.4 + h3 * 0.3, 0.5 + h * 0.3, 0.4 + h2 * 0.4);
-    vec3 c3 = vec3(0.9, 0.7 + h * 0.2, 0.5 + h2 * 0.3);
-    vec3 c4 = vec3(0.1 + h3 * 0.2, 0.15 + h * 0.15, 0.35 + h2 * 0.2);
+vec3 style10(vec2 uv, float t, float b, float tr) { // Matrix
+    vec2 p = uv * vec2(15.0, 10.0);
+    float col = floor(p.x);
+    float v = fract(p.y + t * (hash(col) + 0.5) * 2.0);
+    v = pow(v, 3.0) * step(0.7, hash(col + floor(t * 3.0)));
+    v += b * 0.2;
+    return vec3(0.0, v, 0.0);
+}
 
-    vec3 col = pal(val + t * 0.05 + bass * 0.3, c1, c2, c3, c4);
+vec3 style11(vec2 uv, float t, float b, float tr) { // Aurora borealis
+    float v = 0.0;
+    for (float i = 0.0; i < 4.0; i++) {
+        float f = fbm(vec2(uv.x * 2.0 + i * 0.5, t * 0.2 + i));
+        v += sin(uv.y * 5.0 + f * 3.0 + i + b) * 0.25;
+    }
+    v = v + 0.5;
+    return vec3(0.1, v * 0.8, v * 0.5 + 0.3);
+}
 
-    // Saturation boost avec audio
-    col = mix(col, col * 1.3, bass * 0.5);
+vec3 style12(vec2 uv, float t, float b, float tr) { // Hexagones
+    vec2 p = uv * 5.0;
+    p.x *= 1.1547;
+    p.y += mod(floor(p.x), 2.0) * 0.5;
+    p = fract(p) - 0.5;
+    float d = max(abs(p.x), abs(p.y * 0.866 + p.x * 0.5));
+    float v = smoothstep(0.4, 0.38, d);
+    v *= sin(t + length(uv) * 5.0 - b * 3.0) * 0.5 + 0.5;
+    return vec3(v * 0.9, v * 0.5, v * 0.8 + tr * 0.2);
+}
 
-    // Fade aux bords du segment
-    col *= smoothstep(segAngle * 0.85, 0.0, a);
+vec3 style13(vec2 uv, float t, float b, float tr) { // Nébuleuse
+    float n1 = fbm(uv * 2.0 + t * 0.1);
+    float n2 = fbm(uv * 3.0 - t * 0.15 + 10.0);
+    float n3 = fbm(uv * 4.0 + t * 0.05 + 20.0);
+    vec3 c1 = vec3(0.8, 0.2, 0.5) * n1;
+    vec3 c2 = vec3(0.2, 0.3, 0.9) * n2;
+    vec3 c3 = vec3(0.9, 0.8, 0.3) * n3 * (b + 0.2);
+    return (c1 + c2 + c3) * 0.7;
+}
 
-    // Vignette
-    col *= smoothstep(2.0, 0.4, length(uv));
+vec3 style14(vec2 uv, float t, float b, float tr) { // Laser grid
+    vec2 p = abs(fract(uv * 5.0 + t * 0.2) - 0.5);
+    float g = min(p.x, p.y);
+    float v = smoothstep(0.05, 0.0, g);
+    v += b * 0.3;
+    return vec3(v * 0.3, v, v * 0.8);
+}
 
-    // Luminosité globale réactive
-    col *= 0.75 + bass * 0.4 + treble * 0.15;
+vec3 style15(vec2 uv, float t, float b, float tr) { // Fractal simple
+    vec2 z = uv * 2.0;
+    float v = 0.0;
+    for (int i = 0; i < 8; i++) {
+        z = abs(z) / dot(z, z) - vec2(0.7 + sin(t * 0.3) * 0.2, 0.5 + b * 0.2);
+        v += length(z);
+    }
+    v = v * 0.05;
+    return pal(v, vec3(0.5), vec3(0.5), vec3(1.0), vec3(0.0, 0.33, 0.67));
+}
 
+vec3 style16(vec2 uv, float t, float b, float tr) { // Gouttes de pluie
+    vec2 p = uv * 10.0;
+    vec2 id = floor(p);
+    p = fract(p) - 0.5;
+    float d = length(p);
+    float ripple = sin(d * 20.0 - t * 5.0 - hash21(id) * TAU) * exp(-d * 3.0);
+    ripple *= step(hash21(id + t * 0.1), 0.1 + b * 0.3);
+    return vec3(0.2, 0.4, 0.8) + ripple * 0.5;
+}
+
+vec3 style17(vec2 uv, float t, float b, float tr) { // Lave
+    float n = fbm(uv * 3.0 + t * 0.2);
+    n = pow(n, 2.0);
+    n += b * 0.3;
+    return vec3(1.0, n * 0.6 + 0.2, n * 0.1);
+}
+
+vec3 style18(vec2 uv, float t, float b, float tr) { // Disco ball
+    float a = atan(uv.y, uv.x) * 8.0 / PI;
+    float r = length(uv) * 10.0;
+    float v = sin(floor(a) + t * 3.0) * sin(floor(r) - t * 2.0);
+    v = v * 0.5 + 0.5;
+    v += b * 0.4;
+    vec3 c = pal(floor(a) * 0.1 + floor(r) * 0.1, vec3(0.5), vec3(0.5), vec3(1.0), vec3(0.0, 0.33, 0.67));
+    return c * v;
+}
+
+vec3 style19(vec2 uv, float t, float b, float tr) { // Électricité
+    vec2 p = uv * 2.0;
+    float v = 0.0;
+    for (float i = 0.0; i < 5.0; i++) {
+        p.x += sin(p.y * 3.0 + t * 2.0 + i) * 0.3;
+        v += 0.01 / abs(p.x + sin(p.y * 5.0 + t * 3.0 + i * 1.5) * 0.2);
+    }
+    v = min(v, 1.0) + b * 0.2;
+    return vec3(0.5, 0.7, 1.0) * v;
+}
+
+vec3 style20(vec2 uv, float t, float b, float tr) { // Mandala
+    float a = atan(uv.y, uv.x);
+    float r = length(uv);
+    a = mod(a, PI / 4.0);
+    a = abs(a - PI / 8.0);
+    float v = sin(a * 20.0 + r * 15.0 - t * 2.0 - b * 4.0);
+    v += sin(r * 30.0 - t * 3.0);
+    v = v * 0.25 + 0.5;
+    return pal(v + r * 0.5, vec3(0.5), vec3(0.5), vec3(1.0, 0.5, 0.0), vec3(0.5, 0.2, 0.0));
+}
+
+vec3 style21(vec2 uv, float t, float b, float tr) { // Glitch
+    vec2 p = uv;
+    float glitch = step(0.95, hash(floor(t * 10.0)));
+    p.x += glitch * (hash(floor(p.y * 20.0 + t)) - 0.5) * 0.3;
+    float v = step(0.5, fract(p.x * 10.0 + t));
+    v = mix(v, 1.0 - v, step(0.9, hash(floor(p.y * 5.0) + floor(t * 5.0))));
+    return vec3(v + b * 0.2, v * 0.3, v * 0.8 + tr * 0.3);
+}
+
+vec3 style22(vec2 uv, float t, float b, float tr) { // Bulles
+    vec3 col = vec3(0.1, 0.1, 0.3);
+    for (float i = 0.0; i < 10.0; i++) {
+        vec2 center = vec2(sin(i * 1.3 + t * 0.5), cos(i * 1.7 + t * 0.4)) * 0.7;
+        float r = 0.1 + hash(i) * 0.15;
+        float d = length(uv - center);
+        float bubble = smoothstep(r, r - 0.02, d) - smoothstep(r - 0.02, r - 0.05, d);
+        bubble += smoothstep(r, r - 0.01, d) * 0.3;
+        col += vec3(0.3, 0.6, 0.9) * bubble * (1.0 + b * 0.5);
+    }
     return col;
+}
+
+vec3 style23(vec2 uv, float t, float b, float tr) { // Triangles
+    vec2 p = uv * 6.0;
+    p.x += mod(floor(p.y), 2.0) * 0.5;
+    vec2 f = fract(p) - 0.5;
+    float d = abs(f.x) + abs(f.y);
+    float v = smoothstep(0.5, 0.48, d);
+    v *= sin(floor(p.x) + floor(p.y) + t * 2.0) * 0.5 + 0.5;
+    v += b * 0.3;
+    return vec3(v * 0.9, v * 0.4, v * 0.7);
+}
+
+vec3 style24(vec2 uv, float t, float b, float tr) { // Stroboscope
+    float v = sin(t * 15.0 + length(uv) * 10.0) * 0.5 + 0.5;
+    v = step(0.3, v);
+    v *= (1.0 + b);
+    vec3 c = pal(t * 0.5, vec3(0.5), vec3(0.5), vec3(1.0), vec3(0.0, 0.33, 0.67));
+    return c * v;
+}
+
+vec3 style25(vec2 uv, float t, float b, float tr) { // Gradient tournant
+    float a = atan(uv.y, uv.x) + t * 0.5;
+    float r = length(uv);
+    float v = sin(a * 3.0) * 0.5 + 0.5;
+    v = mix(v, 1.0 - v, sin(r * 5.0 - t * 2.0 + b * 3.0) * 0.5 + 0.5);
+    return pal(v + t * 0.1, vec3(0.8, 0.5, 0.4), vec3(0.2, 0.4, 0.2), vec3(1.0), vec3(0.0, 0.25, 0.25));
+}
+
+vec3 style26(vec2 uv, float t, float b, float tr) { // Fumée
+    vec2 p = uv * 2.0;
+    p.y += t * 0.5;
+    float n = fbm(p + fbm(p + fbm(p)));
+    n += b * 0.2;
+    return vec3(n * 0.8, n * 0.85, n * 0.9);
+}
+
+vec3 style27(vec2 uv, float t, float b, float tr) { // Pixels rétro
+    vec2 p = floor(uv * 20.0) / 20.0;
+    float v = hash21(p + floor(t * 2.0) * 0.01);
+    v = step(0.5 - b * 0.3, v);
+    vec3 c = vec3(hash21(p), hash21(p + 1.0), hash21(p + 2.0));
+    return c * v;
+}
+
+vec3 style28(vec2 uv, float t, float b, float tr) { // Wormhole
+    float a = atan(uv.y, uv.x);
+    float r = length(uv);
+    float spiral = a + r * 5.0 - t * 2.0 - b * 2.0;
+    float v = sin(spiral * 3.0) * 0.5 + 0.5;
+    v *= exp(-r * 0.5);
+    return vec3(v * 0.3, v * 0.2, v + tr * 0.3);
+}
+
+vec3 style29(vec2 uv, float t, float b, float tr) { // Cosmic rays
+    float v = 0.0;
+    for (float i = 0.0; i < 8.0; i++) {
+        float a = i * TAU / 8.0 + t * 0.3;
+        vec2 dir = vec2(cos(a), sin(a));
+        float d = abs(dot(uv, dir));
+        v += 0.01 / (d + 0.01) * (sin(t * 3.0 + i) * 0.5 + 0.5);
+    }
+    v = min(v, 1.0) * (1.0 + b * 0.5);
+    return vec3(v, v * 0.5, v * 0.8);
+}
+
+vec3 getStyle(vec2 uv, float t, float styleId, float bass, float treble) {
+    int id = int(mod(styleId, 30.0));
+
+    if (id == 0) return style0(uv, t, bass, treble);
+    if (id == 1) return style1(uv, t, bass, treble);
+    if (id == 2) return style2(uv, t, bass, treble);
+    if (id == 3) return style3(uv, t, bass, treble);
+    if (id == 4) return style4(uv, t, bass, treble);
+    if (id == 5) return style5(uv, t, bass, treble);
+    if (id == 6) return style6(uv, t, bass, treble);
+    if (id == 7) return style7(uv, t, bass, treble);
+    if (id == 8) return style8(uv, t, bass, treble);
+    if (id == 9) return style9(uv, t, bass, treble);
+    if (id == 10) return style10(uv, t, bass, treble);
+    if (id == 11) return style11(uv, t, bass, treble);
+    if (id == 12) return style12(uv, t, bass, treble);
+    if (id == 13) return style13(uv, t, bass, treble);
+    if (id == 14) return style14(uv, t, bass, treble);
+    if (id == 15) return style15(uv, t, bass, treble);
+    if (id == 16) return style16(uv, t, bass, treble);
+    if (id == 17) return style17(uv, t, bass, treble);
+    if (id == 18) return style18(uv, t, bass, treble);
+    if (id == 19) return style19(uv, t, bass, treble);
+    if (id == 20) return style20(uv, t, bass, treble);
+    if (id == 21) return style21(uv, t, bass, treble);
+    if (id == 22) return style22(uv, t, bass, treble);
+    if (id == 23) return style23(uv, t, bass, treble);
+    if (id == 24) return style24(uv, t, bass, treble);
+    if (id == 25) return style25(uv, t, bass, treble);
+    if (id == 26) return style26(uv, t, bass, treble);
+    if (id == 27) return style27(uv, t, bass, treble);
+    if (id == 28) return style28(uv, t, bass, treble);
+    return style29(uv, t, bass, treble);
 }
 
 void main() {
@@ -105,7 +357,6 @@ void main() {
     float bass = uBass * uSensitivity;
     float treble = uTreble * uSensitivity;
 
-    // Timing des styles
     float duration = 12.0;
     float transitionTime = 3.0;
     float cycle = duration + transitionTime;
@@ -117,34 +368,23 @@ void main() {
     vec3 col;
 
     if (timeInCycle < duration) {
-        // Style actuel
         col = getStyle(uv, t, styleId, bass, treble);
     } else {
-        // Transition fluide
-        float transProgress = (timeInCycle - duration) / transitionTime;
-        transProgress = smoothstep(0.0, 1.0, transProgress);
-        transProgress = transProgress * transProgress * (3.0 - 2.0 * transProgress);
+        float tr = (timeInCycle - duration) / transitionTime;
+        tr = smoothstep(0.0, 1.0, tr);
 
-        // Zoom out du style actuel
-        vec2 uv1 = uv * (1.0 + transProgress * 0.5);
-        uv1 *= rot(transProgress * 0.3);
-        vec3 col1 = getStyle(uv1, t, styleId, bass, treble);
-        col1 *= (1.0 - transProgress * 0.5);
+        vec2 uv1 = uv * (1.0 + tr * 0.3);
+        uv1 *= rot(tr * 0.5);
+        vec3 c1 = getStyle(uv1, t, styleId, bass, treble) * (1.0 - tr * 0.3);
 
-        // Zoom in du prochain style
-        vec2 uv2 = uv * (1.5 - transProgress * 0.5);
-        uv2 *= rot(-transProgress * 0.2);
-        vec3 col2 = getStyle(uv2, t, nextStyleId, bass, treble);
-        col2 *= transProgress;
+        vec2 uv2 = uv * (1.3 - tr * 0.3);
+        uv2 *= rot(-tr * 0.3);
+        vec3 c2 = getStyle(uv2, t, nextStyleId, bass, treble);
 
-        // Mix avec fondu croisé
-        col = mix(col1, col2, smoothstep(0.2, 0.8, transProgress));
-
-        // Flash subtil au milieu de la transition
-        float flash = sin(transProgress * PI);
-        col += vec3(1.0, 0.9, 0.8) * flash * flash * 0.1;
+        col = mix(c1, c2, tr);
     }
 
+    col *= smoothstep(2.0, 0.5, length(uv));
     col = clamp(col, 0.0, 1.0);
 
     gl_FragColor = vec4(col, 1.0);
