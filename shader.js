@@ -328,18 +328,18 @@ void main() {
     vec3 col = vec3(0.0);
 
     if (timeInCycle < duration) {
-        col = renderLayeredEffect(uv, t, id1, uBass * uSensitivity, uTreble * uSensitivity, 0.0);
+        col = renderLayeredEffect(uv, t, currentIdx, uBass * uSensitivity, uTreble * uSensitivity, 0.0);
     } else {
         float transT = (timeInCycle - duration) / transition;
         transT = smoothstep(0.0, 1.0, transT);
         transT = transT * transT * (3.0 - 2.0 * transT); // Smoothstep supplémentaire
 
         float zoom1 = transT * 1.5;
-        vec3 c1 = renderLayeredEffect(uv, t, id1, uBass * uSensitivity, uTreble * uSensitivity, zoom1);
+        vec3 c1 = renderLayeredEffect(uv, t, currentIdx, uBass * uSensitivity, uTreble * uSensitivity, zoom1);
 
         float zoom2 = (transT - 1.0) * 1.5;
         vec2 uv2 = uv * rot(transT * PI * 0.3);
-        vec3 c2 = renderLayeredEffect(uv2, t, id2, uBass * uSensitivity, uTreble * uSensitivity, zoom2);
+        vec3 c2 = renderLayeredEffect(uv2, t, nextIdx, uBass * uSensitivity, uTreble * uSensitivity, zoom2);
 
         float alpha = smoothstep(0.15, 0.85, transT);
         col = mix(c1, c2, alpha);
