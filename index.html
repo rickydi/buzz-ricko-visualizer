@@ -125,7 +125,7 @@
     </div>
     <div id="overlay">
         <h1>BUZZ RICKO</h1>
-        <div style="color: #666; font-size: 18px; margin-top: -15px; margin-bottom: 25px;">v2.8</div>
+        <div style="color: #666; font-size: 18px; margin-top: -15px; margin-bottom: 25px;">v3.0</div>
         <div class="step">1. Cliquez sur le bouton ci-dessous</div>
         <div class="step">2. Sélectionnez l'<span class="hl">onglet ou l'écran</span> avec la musique</div>
         <div class="step">3. <span class="hl" style="text-decoration:underline;">Cochez "Partager l'audio"</span></div>
@@ -145,7 +145,7 @@
         <input type="range" id="volume-slider" min="0" max="1" step="0.05" value="1">
     </div>
     <div id="canvas-container"></div>
-    <div id="style-display"><span class="style-num">1/30</span><span class="style-name">Encre Diffuse</span></div>
+    <div id="style-display"><span class="style-num">1/30</span><span class="style-name">Style 1</span></div>
     <div id="info">Double-cliquez: Plein Écran • 30 Styles • Menu en haut</div>
 
     <script src="shader.js"></script>
@@ -176,12 +176,12 @@
 
         const styleDisplay = document.getElementById('style-display');
         const styleNames = [
-            "Encre Diffuse", "Gouttes Mélangées", "Marbre Liquide", "Flux Coloré", "Nuages Pigment",
-            "Fleurs d'Encre", "Ondulations", "Tourbillon", "Taches Fusion", "Nébuleuse",
-            "Vagues Horizontales", "Vagues Verticales", "Vagues Croisées", "Vagues Circulaires", "Vagues Spirales",
-            "Kaléido Simple", "Kaléido Rotatif", "Kaléido Plasma", "Kaléido Fluide", "Kaléido Géométrique",
-            "Tunnel Infini", "Hypnotique", "Cellules Vivantes", "Diamant", "Morphing",
-            "Aurora", "Fractal", "Plasma Radial", "Interférence", "Cosmos"
+            "Aquarelle", "Nébuleuse", "Marbre", "Fluide", "Nuages",
+            "Fleurs", "Ondulations", "Tourbillon", "Fusion", "Cosmos",
+            "Vagues", "Spirale", "Kaléido", "Plasma", "Diamant",
+            "Aurora", "Fractale", "Cellules", "Tunnel", "Hypnose",
+            "Morphing", "Cristal", "Océan", "Galaxie", "Étoiles",
+            "Fumée", "Lave", "Glace", "Prisme", "Infini"
         ];
         let lastStyle = -1;
 
