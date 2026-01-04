@@ -274,14 +274,17 @@ vec3 renderLayeredEffect(vec2 uv, float t, int id, float b, float tr, float glob
     vec3 finalCol = vec3(0.0);
 
     float fid = float(id);
-    float layers = 5.0 + floor(hash(fid) * 3.0);
+    int numLayers = 5 + int(floor(hash(fid) * 3.0));
     float depthSpeed = 0.3 + hash(fid * 2.0) * 0.3;
 
-    for (float i = 0.0; i < 8.0; i++) {
-        if (i >= layers) break;
+    for (int i = 0; i < 8; i++) {
+        if (i >= numLayers) break;
+
+        float fi = float(i);
+        float fLayers = float(numLayers);
 
         float audioZoom = t * depthSpeed * uSpeed + b * 0.15 * uSpeed;
-        float depth = mod(audioZoom + i / layers + globalZoom, 1.0);
+        float depth = mod(audioZoom + fi / fLayers + globalZoom, 1.0);
         float z = 1.0 / max(0.01, depth);
 
         // Fade plus doux pour effet aquarelle
@@ -292,9 +295,9 @@ vec3 renderLayeredEffect(vec2 uv, float t, int id, float b, float tr, float glob
 
         // Rotation organique lente
         float audioRot = t * 0.3 + b * 0.3;
-        p *= rot(audioRot * (hash(fid + i) - 0.5) * 0.3);
+        p *= rot(audioRot * (hash(fid + fi) - 0.5) * 0.3);
 
-        vec3 col = getPattern(p, t + i * 100.0, id, b, tr);
+        vec3 col = getPattern(p, t + fi * 100.0, id, b, tr);
 
         // Réaction audio subtile
         col *= (1.0 + b * 0.15);
