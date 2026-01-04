@@ -125,7 +125,7 @@
     </div>
     <div id="overlay">
         <h1>BUZZ RICKO</h1>
-        <div style="color: #666; font-size: 18px; margin-top: -15px; margin-bottom: 25px;">v3.6</div>
+        <div style="color: #666; font-size: 18px; margin-top: -15px; margin-bottom: 25px;">v3.7</div>
         <div class="step">1. Cliquez sur le bouton ci-dessous</div>
         <div class="step">2. Sélectionnez l'<span class="hl">onglet ou l'écran</span> avec la musique</div>
         <div class="step">3. <span class="hl" style="text-decoration:underline;">Cochez "Partager l'audio"</span></div>
@@ -148,7 +148,7 @@
     <div id="style-display"><span class="style-num">1/30</span><span class="style-name">Style 1</span></div>
     <div id="info">Double-cliquez: Plein Écran • 30 Styles • Menu en haut</div>
 
-    <script src="shader.js"></script>
+    <script src="shader.js?v=3.7"></script>
     <script>
     (function() {
         const container = document.getElementById('canvas-container');
@@ -313,27 +313,34 @@
             }
         };
 
-        const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x000000);
-        const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setClearColor(0x000000, 1);
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-        container.appendChild(renderer.domElement);
+        let scene, camera, renderer, mat, uniforms;
+        try {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x000000);
+            camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setClearColor(0x000000, 1);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            container.appendChild(renderer.domElement);
 
-        const uniforms = {
-            iTime: { value: 0 },
-            iResolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
-            uBass: { value: 0 },
-            uMid: { value: 0 },
-            uTreble: { value: 0 },
-            uSensitivity: { value: 1.5 },
-            uSpeed: { value: 1.0 }
-        };
+            uniforms = {
+                iTime: { value: 0 },
+                iResolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+                uBass: { value: 0 },
+                uMid: { value: 0 },
+                uTreble: { value: 0 },
+                uSensitivity: { value: 1.5 },
+                uSpeed: { value: 1.0 }
+            };
 
-        const mat = new THREE.ShaderMaterial({ vertexShader, fragmentShader, uniforms });
-        scene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), mat));
+            mat = new THREE.ShaderMaterial({ vertexShader, fragmentShader, uniforms });
+            scene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), mat));
+            console.log('WebGL OK');
+        } catch(e) {
+            alert('Erreur WebGL: ' + e.message);
+            console.error(e);
+        }
 
         function animate(t) {
             requestAnimationFrame(animate);
